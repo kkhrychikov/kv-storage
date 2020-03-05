@@ -1,47 +1,41 @@
 package kvstorage
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
+	"time"
 )
 
 type Client struct {
-	target string
+	target     string
+	timeoutSec int
 }
 
+// GetServerAddr returns server hostname
 func (client *Client) GetServerAddr() string {
 	return client.target
 }
 
-func NewClient(serverAddr string) *Client {
-	return &Client{target: serverAddr}
+// NewClient gets server addres IP:PORT and request timeout in seconds
+func NewClient(serverAddr string, timeoutSec int) *Client {
+	return &Client{target: serverAddr, timeoutSec: timeoutSec}
 }
 
-func prepareKV(key string, val interface{}) (io.Reader, error) {
-	kv := keyVal{key, val}
-	data, err := json.Marshal(kv)
-	if err != nil {
-		return nil, fmt.Errorf("Error on preparing data: %v", err)
-	}
-	return bytes.NewReader(data), nil
-}
-
-func (client *Client) Insert(key string, val interface{}) error {
-	r, err := prepareKV(key, val)
-	if err != nil {
-		return err
-	}
+// Insert sends key value to storage
+// If key already in storage error will be returned
+func (client *Client) Insert(key, val string) error {
 	u := url.URL{
 		Scheme: "http",
 		Host:   client.target,
 		Path:   "insert"}
-	resp, err := http.Post(u.String(), "application/json", r)
+	form := url.Values{}
+	form.Add("key", key)
+	form.Add("val", val)
+	httpClient := http.Client{Timeout: time.Duration(client.timeoutSec) * time.Second}
+	resp, err := httpClient.Post(u.String(), "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
@@ -55,16 +49,18 @@ func (client *Client) Insert(key string, val interface{}) error {
 	return nil
 }
 
-func (client *Client) Update(key string, val interface{}) error {
-	r, err := prepareKV(key, val)
-	if err != nil {
-		return err
-	}
+// Update sends key value to storage
+// If key not in storage error will be returned
+func (client *Client) Update(key, val string) error {
 	u := url.URL{
 		Scheme: "http",
 		Host:   client.target,
 		Path:   "update"}
-	resp, err := http.Post(u.String(), "application/json", r)
+	form := url.Values{}
+	form.Add("key", key)
+	form.Add("val", val)
+	httpClient := http.Client{Timeout: time.Duration(client.timeoutSec) * time.Second}
+	resp, err := httpClient.Post(u.String(), "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
@@ -78,16 +74,17 @@ func (client *Client) Update(key string, val interface{}) error {
 	return nil
 }
 
+// Delete sends key value to storage
+// If key not in storage error will be returned
 func (client *Client) Delete(key string) error {
-	r, err := prepareKV(key, nil)
-	if err != nil {
-		return err
-	}
 	u := url.URL{
 		Scheme: "http",
 		Host:   client.target,
 		Path:   "delete"}
-	resp, err := http.Post(u.String(), "application/json", r)
+	form := url.Values{}
+	form.Add("key", key)
+	httpClient := http.Client{Timeout: time.Duration(client.timeoutSec) * time.Second}
+	resp, err := httpClient.Post(u.String(), "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
@@ -101,25 +98,26 @@ func (client *Client) Delete(key string) error {
 	return nil
 }
 
-func (client *Client) Select(key string) ([]byte, error) {
-	r, err := prepareKV(key, nil)
-	if err != nil {
-		return nil, err
-	}
+// Select requests value from storage
+// If key not in storage error will be returned
+func (client *Client) Select(key string) (string, error) {
 	u := url.URL{
 		Scheme: "http",
 		Host:   client.target,
 		Path:   "select"}
-	resp, err := http.Post(u.String(), "application/json", r)
+	form := url.Values{}
+	form.Add("key", key)
+	httpClient := http.Client{Timeout: time.Duration(client.timeoutSec) * time.Second}
+	resp, err := httpClient.Post(u.String(), "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errors.New("Select failed: Can't get message from server " + client.target)
+		return "", errors.New("Select failed: Can't get message from server " + client.target)
 	}
 	if resp.StatusCode != 200 {
-		return nil, errors.New("Select failed: " + string(b))
+		return "", errors.New("Select failed: " + string(b))
 	}
-	return b, nil
+	return string(b), nil
 }

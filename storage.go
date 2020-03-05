@@ -1,117 +1,72 @@
 package kvstorage
 
 import (
-	"encoding/json"
 	"errors"
 	"sync"
 )
 
-type Storage interface {
-	Insert(KeyVal) (interface{}, error)
-	Update(KeyVal) (interface{}, error)
-	Select(KeyVal) (interface{}, error)
-	Delete(KeyVal) (interface{}, error)
-	Marshal(interface{}) ([]byte, error)
-	Unmarshal([]byte) (KeyVal, error)
-}
-
-type StringsStorage struct {
+type Storage struct {
 	storage map[string]string
 	mt      *sync.RWMutex
 }
 
-func CreateStringsStorage() StringsStorage {
-	return StringsStorage{make(map[string]string), &sync.RWMutex{}}
+// NewStorage creates simple [string -> string] storage
+func NewStorage() Storage {
+	return Storage{make(map[string]string), &sync.RWMutex{}}
 }
 
-func (storage StringsStorage) Insert(kv KeyVal) (interface{}, error) {
+// Insert adding key and value to storage.
+// If key already in storage error will be returned
+func (storage Storage) Insert(key, val string) error {
 	storage.mt.RLock()
-	if _, ok := storage.storage[kv.GetKey()]; ok {
+	if _, ok := storage.storage[key]; ok {
 		storage.mt.RUnlock()
-		return nil, errors.New("Key already in storage")
+		return errors.New("Key already in storage")
 	}
 	storage.mt.RUnlock()
 	storage.mt.Lock()
-	storage.storage[kv.GetKey()] = kv.GetVal().(string)
+	storage.storage[key] = val
 	storage.mt.Unlock()
-	return nil, nil
+	return nil
 }
-func (storage StringsStorage) Update(kv KeyVal) (interface{}, error) {
+
+// Update is replacing value of the key in storage.
+// If key dont exists in storage error will be returned
+func (storage Storage) Update(key, val string) error {
 	storage.mt.RLock()
-	if _, ok := storage.storage[kv.GetKey()]; !ok {
+	if _, ok := storage.storage[key]; !ok {
 		storage.mt.RUnlock()
-		return nil, errors.New("Key not in storage")
+		return errors.New("Key not in storage")
 	}
 	storage.mt.RUnlock()
 	storage.mt.Lock()
-	storage.storage[kv.GetKey()] = kv.GetVal().(string)
+	storage.storage[key] = val
 	storage.mt.Unlock()
-	return nil, nil
+	return nil
 }
-func (storage StringsStorage) Select(kv KeyVal) (interface{}, error) {
+
+// Select returns value of the key in storage.
+// If key dont exists in storage error will be returned
+func (storage Storage) Select(key string) (string, error) {
 	storage.mt.RLock()
 	defer storage.mt.RUnlock()
-	if v, ok := storage.storage[kv.GetKey()]; ok {
+	if v, ok := storage.storage[key]; ok {
 		return v, nil
 	}
-	return nil, errors.New("Key not in storage")
+	return "", errors.New("Key not in storage")
 }
-func (storage StringsStorage) Delete(kv KeyVal) (interface{}, error) {
+
+// Delete clears key/value pair from storage.
+// If key dont exists in storage error will be returned
+func (storage Storage) Delete(key string) error {
 	storage.mt.RLock()
-	if _, ok := storage.storage[kv.GetKey()]; !ok {
+	if _, ok := storage.storage[key]; !ok {
 		storage.mt.RUnlock()
-		return nil, errors.New("Key not in storage")
+		return errors.New("Key not in storage")
 	}
 	storage.mt.RUnlock()
 	storage.mt.Lock()
-	delete(storage.storage, kv.GetKey())
+	delete(storage.storage, key)
 	storage.mt.Unlock()
-	return nil, nil
-}
-
-func (storage StringsStorage) Marshal(data interface{}) ([]byte, error) {
-	if v, ok := data.(string); ok {
-		return []byte(v), nil
-	}
-	return nil, errors.New("Can't marshal: value is not string")
-}
-
-func (storage StringsStorage) Unmarshal(b []byte) (KeyVal, error) {
-	kv := keyValString{}
-	err := json.Unmarshal(b, &kv)
-	if err != nil {
-		return nil, err
-	}
-	return kv, nil
-}
-
-type KeyVal interface {
-	GetKey() string
-	GetVal() interface{}
-}
-
-type keyValString struct {
-	Key string
-	Val string
-}
-
-func (kv keyValString) GetKey() string {
-	return kv.Key
-}
-
-func (kv keyValString) GetVal() interface{} {
-	return kv.Val
-}
-
-type keyVal struct {
-	Key string
-	Val interface{}
-}
-
-func (kv keyVal) GetKey() string {
-	return kv.Key
-}
-
-func (kv keyVal) GetVal() interface{} {
-	return kv.Val
+	return nil
 }

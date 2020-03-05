@@ -3,7 +3,6 @@ package kvstorage
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -15,7 +14,9 @@ type Server struct {
 	storage    Storage
 }
 
-func NewServer(port int, storage Storage) (*Server, error) {
+// NewServer creates new HTTP server with user storage
+// Use rwTimeoutSec to specify read and write timeout
+func NewServer(port int, rwTimeoutSec int, storage Storage) (*Server, error) {
 	if port < 0 || 65535 < port {
 		return nil, fmt.Errorf("Port %v is not valid", port)
 	}
@@ -25,15 +26,34 @@ func NewServer(port int, storage Storage) (*Server, error) {
 	server.httpServer = &http.Server{
 		Addr:         addr,
 		Handler:      router,
-		WriteTimeout: time.Second * 15,
-		ReadTimeout:  time.Second * 15,
-		IdleTimeout:  time.Second * 60}
+		WriteTimeout: time.Second * time.Duration(rwTimeoutSec),
+		ReadTimeout:  time.Second * time.Duration(rwTimeoutSec)}
 	return &server, nil
 }
 
+// Start launches server in separate goroutine
 func (server *Server) Start() {
-	err := server.httpServer.ListenAndServe()
-	log.Printf("Error start server on %s : %v", server.httpServer.Addr, err)
+	go func() {
+		err := server.httpServer.ListenAndServe()
+		log.Printf("Error start server on %s : %v", server.httpServer.Addr, err)
+	}()
+}
+
+// Stop gracefully shuts down the server without interrupting any active connections
+func (server *Server) Stop() {
+	go func() {
+		err := server.httpServer.ListenAndServe()
+		log.Printf("Error start server on %s : %v", server.httpServer.Addr, err)
+	}()
+}
+
+// ForceStop immediately closes all active connections.
+// For a graceful shutdown, use Stop.
+func (server *Server) ForceStop() {
+	go func() {
+		err := server.httpServer.ListenAndServe()
+		log.Printf("Error start server on %s : %v", server.httpServer.Addr, err)
+	}()
 }
 
 type router struct {
@@ -51,28 +71,20 @@ func (router *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (router *router) ProcessStorageRequest(w http.ResponseWriter, r *http.Request) {
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(400)
-		w.Write([]byte(err.Error()))
-		return
-	}
-	kv, err := router.server.storage.Unmarshal(data)
-	if err != nil {
-		w.WriteHeader(400)
-		w.Write([]byte(err.Error()))
-		return
-	}
-	var res interface{}
+	r.ParseForm()
+	key := r.Form.Get("key")
+	val := r.Form.Get("val")
+	var res string
+	var err error
 	switch r.URL.Path {
 	case "/insert":
-		res, err = router.server.storage.Insert(kv)
+		err = router.server.storage.Insert(key, val)
 	case "/update":
-		res, err = router.server.storage.Update(kv)
+		err = router.server.storage.Update(key, val)
 	case "/select":
-		res, err = router.server.storage.Select(kv)
+		res, err = router.server.storage.Select(key)
 	case "/delete":
-		res, err = router.server.storage.Delete(kv)
+		err = router.server.storage.Delete(key)
 	default:
 		err = errors.New(`Unknown command path. Use "insert","update", "select" or "delete"`)
 	}
@@ -81,17 +93,8 @@ func (router *router) ProcessStorageRequest(w http.ResponseWriter, r *http.Reque
 		w.Write([]byte(err.Error()))
 		return
 	}
-	var b []byte
-	if res != nil {
-		b, err = router.server.storage.Marshal(res)
-	}
-	if err != nil {
-		w.WriteHeader(400)
-		w.Write([]byte(err.Error()))
-		return
-	}
 	w.WriteHeader(200)
-	if b != nil {
-		w.Write(b)
+	if res != "" {
+		w.Write([]byte(res))
 	}
 }
