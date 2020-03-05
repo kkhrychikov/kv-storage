@@ -11,12 +11,12 @@ import (
 
 type Server struct {
 	httpServer *http.Server
-	storage    Storage
+	storage    *Storage
 }
 
 // NewServer creates new HTTP server with user storage
 // Use rwTimeoutSec to specify read and write timeout
-func NewServer(port int, rwTimeoutSec int, storage Storage) (*Server, error) {
+func NewServer(port int, rwTimeoutSec int, storage *Storage) (*Server, error) {
 	if port < 0 || 65535 < port {
 		return nil, fmt.Errorf("Port %v is not valid", port)
 	}
@@ -39,21 +39,9 @@ func (server *Server) Start() {
 	}()
 }
 
-// Stop gracefully shuts down the server without interrupting any active connections
-func (server *Server) Stop() {
-	go func() {
-		err := server.httpServer.ListenAndServe()
-		log.Printf("Error start server on %s : %v", server.httpServer.Addr, err)
-	}()
-}
-
-// ForceStop immediately closes all active connections.
-// For a graceful shutdown, use Stop.
-func (server *Server) ForceStop() {
-	go func() {
-		err := server.httpServer.ListenAndServe()
-		log.Printf("Error start server on %s : %v", server.httpServer.Addr, err)
-	}()
+// Stop immediately closes all active connections.
+func (server *Server) Stop() error {
+	return server.httpServer.Close()
 }
 
 type router struct {

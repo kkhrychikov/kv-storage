@@ -10,13 +10,15 @@ import (
 
 func main() {
 	port := 1234
-	server, err := kvstorage.NewServer(1234, 10, kvstorage.NewStorage())
+	storage := kvstorage.NewStorage()
+	server, err := kvstorage.NewServer(1234, 10, storage)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	server.Start()
 
+	server.Start()
 	runtime.Gosched()
+
 	client := kvstorage.NewClient("127.0.0.1:"+strconv.Itoa(port), 10)
 	err = client.Insert("foo", "bar")
 	if err != nil {
@@ -27,5 +29,12 @@ func main() {
 		fmt.Println(err)
 	} else {
 		fmt.Println(res)
+	}
+	server.Stop()
+	els, err := storage.Dump()
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(string(els))
 	}
 }

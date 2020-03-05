@@ -1,7 +1,9 @@
 package kvstorage
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -11,13 +13,16 @@ type Storage struct {
 }
 
 // NewStorage creates simple [string -> string] storage
-func NewStorage() Storage {
-	return Storage{make(map[string]string), &sync.RWMutex{}}
+func NewStorage() *Storage {
+	return &Storage{make(map[string]string), &sync.RWMutex{}}
 }
 
 // Insert adding key and value to storage.
 // If key already in storage error will be returned
-func (storage Storage) Insert(key, val string) error {
+func (storage *Storage) Insert(key, val string) error {
+	if key == "" {
+		return errors.New("Empty key")
+	}
 	storage.mt.RLock()
 	if _, ok := storage.storage[key]; ok {
 		storage.mt.RUnlock()
@@ -32,7 +37,10 @@ func (storage Storage) Insert(key, val string) error {
 
 // Update is replacing value of the key in storage.
 // If key dont exists in storage error will be returned
-func (storage Storage) Update(key, val string) error {
+func (storage *Storage) Update(key, val string) error {
+	if key == "" {
+		return errors.New("Empty key")
+	}
 	storage.mt.RLock()
 	if _, ok := storage.storage[key]; !ok {
 		storage.mt.RUnlock()
@@ -47,7 +55,10 @@ func (storage Storage) Update(key, val string) error {
 
 // Select returns value of the key in storage.
 // If key dont exists in storage error will be returned
-func (storage Storage) Select(key string) (string, error) {
+func (storage *Storage) Select(key string) (string, error) {
+	if key == "" {
+		return "", errors.New("Empty key")
+	}
 	storage.mt.RLock()
 	defer storage.mt.RUnlock()
 	if v, ok := storage.storage[key]; ok {
@@ -58,7 +69,10 @@ func (storage Storage) Select(key string) (string, error) {
 
 // Delete clears key/value pair from storage.
 // If key dont exists in storage error will be returned
-func (storage Storage) Delete(key string) error {
+func (storage *Storage) Delete(key string) error {
+	if key == "" {
+		return errors.New("Empty key")
+	}
 	storage.mt.RLock()
 	if _, ok := storage.storage[key]; !ok {
 		storage.mt.RUnlock()
@@ -69,4 +83,37 @@ func (storage Storage) Delete(key string) error {
 	delete(storage.storage, key)
 	storage.mt.Unlock()
 	return nil
+}
+
+// Dump return storage elements in JSON format
+func (storage *Storage) Dump() ([]byte, error) {
+	return json.Marshal(storage.storage)
+}
+
+// Reset clears all data
+func (storage *Storage) Reset() {
+	storage.storage = make(map[string]string)
+	return
+}
+
+// Load wipes storage and adds new json data.
+// Data must be dumped earlier from storage or be {"key":"value"} format like
+// {"Name":"Adam","Age":"36","Job":"CEO"}
+func (storage *Storage) Load(data []byte) (stat string, err error) {
+	rawMap := make(map[string]interface{})
+	err = json.Unmarshal(data, &rawMap)
+	if err != nil {
+		return "", err
+	}
+	storage.Reset()
+	insertedCount := 0
+	for k, v := range rawMap {
+		if val, ok := v.(string); ok {
+			err = storage.Insert(k, val)
+			if err == nil {
+				insertedCount++
+			}
+		}
+	}
+	return fmt.Sprintf("Added %d/%d pairs", insertedCount, len(rawMap)), nil
 }
