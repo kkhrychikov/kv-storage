@@ -10,8 +10,9 @@ import (
 
 func main() {
 	port := 1234
+	timeout := 10
 	storage := kvstorage.NewStorage()
-	server, err := kvstorage.NewServer(1234, 10, storage)
+	server, err := kvstorage.NewServer(port, timeout, storage)
 	if err != nil {
 		log.Fatalln(err)
 	}
