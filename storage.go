@@ -23,13 +23,11 @@ func (storage *Storage) Insert(key, val string) error {
 	if key == "" {
 		return errors.New("Empty key")
 	}
-	storage.mt.RLock()
+	storage.mt.Lock()
 	if _, ok := storage.storage[key]; ok {
-		storage.mt.RUnlock()
+		storage.mt.Unlock()
 		return errors.New("Key already in storage")
 	}
-	storage.mt.RUnlock()
-	storage.mt.Lock()
 	storage.storage[key] = val
 	storage.mt.Unlock()
 	return nil
@@ -41,13 +39,11 @@ func (storage *Storage) Update(key, val string) error {
 	if key == "" {
 		return errors.New("Empty key")
 	}
-	storage.mt.RLock()
+	storage.mt.Lock()
 	if _, ok := storage.storage[key]; !ok {
-		storage.mt.RUnlock()
+		storage.mt.Unlock()
 		return errors.New("Key not in storage")
 	}
-	storage.mt.RUnlock()
-	storage.mt.Lock()
 	storage.storage[key] = val
 	storage.mt.Unlock()
 	return nil
@@ -73,13 +69,11 @@ func (storage *Storage) Delete(key string) error {
 	if key == "" {
 		return errors.New("Empty key")
 	}
-	storage.mt.RLock()
+	storage.mt.Lock()
 	if _, ok := storage.storage[key]; !ok {
-		storage.mt.RUnlock()
+		storage.mt.Unlock()
 		return errors.New("Key not in storage")
 	}
-	storage.mt.RUnlock()
-	storage.mt.Lock()
 	delete(storage.storage, key)
 	storage.mt.Unlock()
 	return nil
